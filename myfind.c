@@ -4,9 +4,11 @@
 // Beispiel 1
 //
 // @author Dominic Mages <ic17b014@technikum-wien.at>
-// @date 2005/02/22
+// @author Ralph Hödl <ic17b003@technikum-wien.at>
+// @author David North <ic17b086@technikum-wien.at>
+// @date 2018/03/17
 //
-// @version 001
+// @version 002
 //
 // @todo Add required fucntionality.
 //
@@ -21,8 +23,8 @@
 #include <string.h> // strerror
 
 // Prototypes
-void do_file(char *fp_path, struct stat atrr);
-void do_dir(char *dp_path, struct stat sb);
+void do_file(const char *fp_path, const struct stat *atrr);
+void do_dir(const char *dp_path, const struct stat *sb);
 
 int main(int argc, char *argv[])
 {
@@ -31,49 +33,45 @@ int main(int argc, char *argv[])
     // argv = argv;
 
     char *location = argv[1];
-    char cwd[] = "./";
-    struct stat attr;
+    struct stat *attr = NULL;
 
-    if (location == NULL)
-    {
-        location = cwd;
-    }
-
-    // debug
-    // fprintf(stdout, "Path is: %s\n", location);
-
-    errno = 0;
-    if (lstat(location, &attr) == 0)
-    {
+//TODO: lstat is ueberflussig --> da in do_file passiert
+//TODO: in main only do_file, rest handled in those functions
         do_file(location, attr);
-        if (S_ISDIR(attr.st_mode))
-        {
-            do_dir(location, attr);
-        }
-    }
-    else
-    {
-        fprintf(stderr, "myfind: lstat(%s): %s\n", location, strerror(errno));
-    }
+//TODO: argv[0] anstatt hardcoded filename
 
     return 0;
 }
 
+// TODO: aParams - to mangage all params including filename and targetdirectory
 // do_file - simple in the beginning, will grow enormeous
-void do_file(char *fp_path, struct stat attr)
+void do_file(const char *fp_path, const struct stat *attr)
 {
+    errno = 0;
+    if(lstat(fp_path, attr) == 0) {
+	
+    }
+//TODO: erster entry kann file oder directory sein und muss vorhanden sein
+//TODO: lstat hier, wenn nicht --> exit code
+
+//TODO: if (S_ISDIR(sb.st_mode)) check in do_file. if true, call do_dir, if falsy, countinue do_file 
     attr = attr; //prevent unused params, need for later implementation
+    //if(lstat(fp_path, attr) != 0) {
+    //    fprintf(stderr, "here is my awesome argv[0]: lstat(%s): %s\n", fullpath, strerror(errno));
+    //}
+    //if(S_ISDIR(attr->st_mode)) {
+//	do_dir(fp_path, 
+  //  }
     printf("%s\n", fp_path);
+//    return 0;
 }
 
 // do_dir - main logic for intermediate showcase
-void do_dir(char *dpath, struct stat sb)
+void do_dir(const char *dpath, const struct stat *sb)
 {
     DIR *dir;
     struct dirent *entry;
-    sb = sb;
     char *slash = "";
-    char *fullpath;
     unsigned long pathlength;
 
     errno = 0;
@@ -101,41 +99,20 @@ void do_dir(char *dpath, struct stat sb)
 
         /* allocate memory for the full entry path */
         pathlength += strlen(entry->d_name) + 2;
-        fullpath = malloc(sizeof(char) * pathlength);
-
-        if (!fullpath)
-        {
-            fprintf(stderr, "myfind: malloc(): %s\n", strerror(errno));
-            break; // a return would require a closedir()
-        }
+        char fullpath[pathlength];
 
         /* concat the path with the entry name */
         if (snprintf(fullpath, pathlength, "%s%s%s", dpath, slash, entry->d_name) < 0)
         {
             fprintf(stderr, "myfind: snprintf(): %s\n", strerror(errno));
-            free(fullpath);
             break;
         }
-
-        if (lstat(fullpath, &sb) == 0)
-        {
-            do_file(fullpath, sb);
-            //if a directory, call the function recursively
-            if (S_ISDIR(sb.st_mode))
-            {
-                do_dir(fullpath, sb);
-            }
-        }
-        else
-        {
-            fprintf(stderr, "myfind: lstat(%s): %s\n", fullpath, strerror(errno));
-            free(fullpath);
-            continue;
-        }
-
-        free(fullpath);
+        do_file(fullpath, sb);
     }
 
+    if (errno != 0) {
+	fprintf(stderr, "my fucking awesome argv[0] replacement: readdir(%s): %s\n", dpath, strerror(errno));
+    }
     if (closedir(dir) != 0)
     {
         fprintf(stderr, "myfind: closedir(%s): %s\n", dpath, strerror(errno));

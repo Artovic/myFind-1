@@ -49,8 +49,8 @@ char *programName = "";
 // Prototypes
 int parse_params(int argc, char *argv[], t_params *params);
 int free_params(t_params *params);
-void do_file(const char *fp_path, t_params *params, struct stat *atrr);
-void do_dir(const char *dp_path, t_params *params, struct stat *sb);
+void do_file(const char *fp_path, t_params *params);
+void do_dir(const char *dp_path, t_params *params);
 int do_user(unsigned int userid, struct stat *attr);
 int do_path(char *path, char *pattern);
 int do_name(char *path, char *pattern);
@@ -82,9 +82,8 @@ int main(int argc, char *argv[])
     }
 
     char *location = argv[1];
-    struct stat *attr = NULL;
 
-    do_file(location, params, attr);
+    do_file(location, params);
 
     free_params(params);
     return 0;
@@ -93,16 +92,17 @@ int main(int argc, char *argv[])
 // TODO: aParams - to mangage all params including filename and targetdirectory
 // @ralph, david: Hab das zurückgeändert in struct stat *attr, weil ich nicht verstehe, wie das mit const funktionieren soll
 // ls stat verweigert eine verarbeitung mit const... ka was der galla da dann will....
-void do_file(const char *fp_path, t_params *params, struct stat *attr)
+void do_file(const char *fp_path, t_params *params)
 {
+    struct stat attr;
 
     errno = 0;
-    if (lstat(fp_path, attr) == 0)
+    if (lstat(fp_path, &attr) == 0)
     {
         // printf("%s\n", fp_path);
-        if (S_ISDIR(attr->st_mode))
+        if (S_ISDIR(attr.st_mode))
         {
-            do_dir(fp_path, params, attr);
+            do_dir(fp_path, params);
         }
     }
     //TODO: erster entry kann file oder directory sein und muss vorhanden sein
@@ -117,7 +117,7 @@ void do_file(const char *fp_path, t_params *params, struct stat *attr)
 }
 
 // do_dir - main logic for intermediate showcase
-void do_dir(const char *dpath, t_params *params, struct stat *sb)
+void do_dir(const char *dpath, t_params *params)
 {
     DIR *dir;
     struct dirent *entry;
@@ -157,7 +157,7 @@ void do_dir(const char *dpath, t_params *params, struct stat *sb)
             fprintf(stderr, "%s: snprintf(): %s\n", programName, strerror(errno));
             break;
         }
-        do_file(fullpath, params, sb);
+        do_file(fullpath, params);
     }
 
     if (errno != 0)

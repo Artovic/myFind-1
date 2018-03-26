@@ -43,14 +43,14 @@ typedef struct s_params
     struct s_params *next;
 } t_params;
 
-// global for program name - think about a workaround for this
+// global for program name - got ok from galla for this
 char *programName = "";
 
 // Prototypes
 int parse_params(int argc, char *argv[], t_params *params);
-int clear_params(t_params *params);
-void do_file(const char *fp_path, struct stat *atrr);
-void do_dir(const char *dp_path, struct stat *sb);
+int free_params(t_params *params);
+void do_file(const char *fp_path, t_params *params, struct stat *atrr);
+void do_dir(const char *dp_path, t_params *params, struct stat *sb);
 int do_user(unsigned int userid, struct stat *attr);
 int do_path(char *path, char *pattern);
 int do_name(char *path, char *pattern);
@@ -77,47 +77,47 @@ int main(int argc, char *argv[])
 
     if (parse_params(argc, argv, params) != 0)
     {
-        // clear_params(params);
+        free_params(params);
         return 1;
     }
 
     char *location = argv[1];
     struct stat *attr = NULL;
 
-    //TODO: lstat is ueberflussig --> da in do_file passiert
-    //TODO: in main only do_file, rest handled in those functions
-    do_file(location, attr);
+    do_file(location, params, attr);
 
-    // clear_params(params);
+    free_params(params);
     return 0;
 }
 
 // TODO: aParams - to mangage all params including filename and targetdirectory
 // @ralph, david: Hab das zurückgeändert in struct stat *attr, weil ich nicht verstehe, wie das mit const funktionieren soll
 // ls stat verweigert eine verarbeitung mit const... ka was der galla da dann will....
-void do_file(const char *fp_path, struct stat *attr)
+void do_file(const char *fp_path, t_params *params, struct stat *attr)
 {
 
     errno = 0;
     if (lstat(fp_path, attr) == 0)
     {
+        // printf("%s\n", fp_path);
+        if (S_ISDIR(attr->st_mode))
+        {
+            do_dir(fp_path, params, attr);
+        }
     }
     //TODO: erster entry kann file oder directory sein und muss vorhanden sein
     //TODO: lstat hier, wenn nicht --> exit code
 
     //TODO: if (S_ISDIR(sb.st_mode)) check in do_file. if true, call do_dir, if falsy, countinue do_file
-    //if(lstat(fp_path, attr) != 0) {
-    //    fprintf(stderr, "here is my awesome argv[0]: lstat(%s): %s\n", fullpath, strerror(errno));
-    //}
-    //if(S_ISDIR(attr->st_mode)) {
-    //	do_dir(fp_path,
-    //  }
-    printf("%s\n", fp_path);
+    else
+    {
+        fprintf(stderr, "%s: lstat(%s): %s\n", programName, fp_path, strerror(errno));
+        }
     //    return 0;
 }
 
 // do_dir - main logic for intermediate showcase
-void do_dir(const char *dpath, struct stat *sb)
+void do_dir(const char *dpath, t_params *params, struct stat *sb)
 {
     DIR *dir;
     struct dirent *entry;
@@ -157,7 +157,7 @@ void do_dir(const char *dpath, struct stat *sb)
             fprintf(stderr, "%s: snprintf(): %s\n", programName, strerror(errno));
             break;
         }
-        do_file(fullpath, sb);
+        do_file(fullpath, params, sb);
     }
 
     if (errno != 0)
@@ -352,7 +352,7 @@ int parse_params(int argc, char *argv[], t_params *params)
     return 0;
 }
 
-int do_free_params(t_params *params)
+int free_params(t_params *params)
 {
 
     while (params)

@@ -27,6 +27,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 // linked list that contains all params
 typedef struct s_params
@@ -49,7 +50,7 @@ char *programName = "";
 // Prototypes
 int parse_params(int argc, char *argv[], t_params *params);
 int free_params(t_params *params);
-void do_file(const char *fp_path, t_params *params);
+int do_file(const char *fp_path, t_params *params);
 void do_dir(const char *dp_path, t_params *params);
 int do_user(unsigned int userid, struct stat *attr);
 int do_type(char type, struct stat *attr);
@@ -86,29 +87,72 @@ int main(int argc, char *argv[])
     do_file(location, params);
 
     free_params(params);
+
     return 0;
 }
 
 // TODO: aParams - to mangage all params including filename and targetdirectory
 // @ralph, david: Hab das zurückgeändert in struct stat *attr, weil ich nicht verstehe, wie das mit const funktionieren soll
-void do_file(const char *fp_path, t_params *params)
+int do_file(const char *fp_path, t_params *params)
 {
     errno = 0;
     struct stat attr;
 
     int wasPrinted = 0;
     wasPrinted = wasPrinted;
-
-    do
-    {
-
-        params = params->next;
-    } while (params);
-
-    //TODO: if (S_ISDIR(sb.st_mode)) check in do_file. if true, call do_dir, if falsy, countinue do_file
     if (lstat(fp_path, &attr) == 0)
     {
-        printf("%s\n", fp_path);
+        // starting with filter functionalities
+        // type
+        // if (params->type)
+        // {
+        //     if (do_type(params->type, attr) != 0)
+        //     {
+        //         return 0; /* the entry didn't pass the check, do not print it */
+        //     }
+        // }
+
+        // user
+        // if (params->user)
+        // {
+        //     if (do_user(params->userid, attr) != 0)
+        //     {
+        //         return 0;
+        //     }
+        // }
+
+        // print functionality
+        // simple path print
+        if (params->print)
+        {
+            if (do_print(fp_path) != 0)
+            {
+                return 1; /* a fatal error occurred */
+            }
+            wasPrinted = 1;
+        }
+
+        // detailed ls print
+        // if (params->ls)
+        // {
+        //     if (do_ls(path, attr) != 0)
+        //     {
+        //         return 1;
+        //     }
+        //     wasPrinted = 1;
+        // }
+        // printf("%s\n", fp_path);
+
+        if (wasPrinted == 0)
+        {
+            if (do_print(fp_path) != 0)
+            {
+                return 1;
+            }
+        }
+
+        //TODO: if (S_ISDIR(sb.st_mode)) check in do_file. if true, call do_dir, if falsy, countinue do_file
+        // printf("%s\n", fp_path);
         if (S_ISDIR(attr.st_mode))
         {
             do_dir(fp_path, params);
@@ -118,6 +162,7 @@ void do_file(const char *fp_path, t_params *params)
     {
         fprintf(stderr, "%s: lstat(%s): %s\n", programName, fp_path, strerror(errno));
     }
+    return true;
 }
 
 // do_dir - main logic for intermediate showcase
@@ -297,11 +342,6 @@ int parse_params(int argc, char *argv[], t_params *params)
             status = 1;
             break;
         }
-        else
-        {
-            status = 5;
-            break;
-        }
     }
 
     /* error handling */
@@ -348,232 +388,244 @@ int free_params(t_params *params)
     return 1;
 }
 
-int do_user(unsigned int userid, struct stat *attr)
+int do_print(const char *fp_path)
 {
-    if (userid == (unsigned int)attr->st_uid)
-        return 0;
-    else
-        return 1;
+
+    if (printf("%s\n", fp_path) < 0)
+    {
+        fprintf(stderr, "%s: printf(): %s\n", programName, strerror(errno));
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
 }
 
-int do_type(char type, struct stat *attr)
-{
-    int checkvalue;
-    switch (type)
-    {
-    case 'd':
-        checkvalue = S_ISDIR(attr->st_mode);
-        break;
-    case 'b':
-        checkvalue = S_ISBLK(attr->st_mode);
-        break;
-    case 'c':
-        checkvalue = S_ISCHR(attr->st_mode);
-        break;
-    case 'p':
-        checkvalue = S_ISFIFO(attr->st_mode);
-        break;
-    case 'f':
-        checkvalue = S_ISREG(attr->st_mode);
-        break;
-    case 'l':
-        checkvalue = S_ISLNK(attr->st_mode);
-        break;
-    case 's':
-        checkvalue = S_ISSOCK(attr->st_mode);
-        break;
-    default:
-        checkvalue = 0;
-        break;
-    }
+// int do_user(unsigned int userid, struct stat *attr)
+// {
+//     if (userid == (unsigned int)attr->st_uid)
+//         return 0;
+//     else
+//         return 1;
+// }
 
-    if (checkvalue != 0)
-        return 0;
-    else
-        return 1;
-}
+// int do_type(char type, struct stat *attr)
+// {
+//     int checkvalue;
+//     switch (type)
+//     {
+//     case 'd':
+//         checkvalue = S_ISDIR(attr->st_mode);
+//         break;
+//     case 'b':
+//         checkvalue = S_ISBLK(attr->st_mode);
+//         break;
+//     case 'c':
+//         checkvalue = S_ISCHR(attr->st_mode);
+//         break;
+//     case 'p':
+//         checkvalue = S_ISFIFO(attr->st_mode);
+//         break;
+//     case 'f':
+//         checkvalue = S_ISREG(attr->st_mode);
+//         break;
+//     case 'l':
+//         checkvalue = S_ISLNK(attr->st_mode);
+//         break;
+//     case 's':
+//         checkvalue = S_ISSOCK(attr->st_mode);
+//         break;
+//     default:
+//         checkvalue = 0;
+//         break;
+//     }
 
-int do_ls(char *path, struct stat *attr)
-{
-    //-rwxrwxrwx 1 root root 1234 March 17 10:00 filename.exention
-    int i = 0;
-    char typ = '0';
-    char *user;
-    char *group;
-    struct passwd *pwd;
-    struct group *grp;
-    char *stime = "";
-    time_t t = time(NULL);
-    struct tm *deadline_time = localtime(&t);
-    if (deadline_time == NULL)
-        return 1;
-    deadline_time->tm_year = deadline_time->tm_year + 1900;
-    struct tm *modified_time = localtime(&attr->st_mtime);
-    if (modified_time == NULL)
-        return 1;
-    modified_time->tm_year = modified_time->tm_year + 1900;
-    int flag = 1;
-    char *filename;
-    char *symlink;
-    char *pfeil;
+//     if (checkvalue != 0)
+//         return 0;
+//     else
+//         return 1;
+// }
 
-    //user and group name
-    grp = getgrgid((unsigned int)attr->st_gid);
-    if (grp == NULL)
-        return 1;
-    group = grp->gr_name;
+// int do_ls(char *path, struct stat *attr)
+// {
+//     //-rwxrwxrwx 1 root root 1234 March 17 10:00 filename.exention
+//     int i = 0;
+//     char typ = '0';
+//     char *user;
+//     char *group;
+//     struct passwd *pwd;
+//     struct group *grp;
+//     char *stime = "";
+//     time_t t = time(NULL);
+//     struct tm *deadline_time = localtime(&t);
+//     if (deadline_time == NULL)
+//         return 1;
+//     deadline_time->tm_year = deadline_time->tm_year + 1900;
+//     struct tm *modified_time = localtime(&attr->st_mtime);
+//     if (modified_time == NULL)
+//         return 1;
+//     modified_time->tm_year = modified_time->tm_year + 1900;
+//     int flag = 1;
+//     char *filename;
+//     char *symlink;
+//     char *pfeil;
 
-    pwd = getpwuid((unsigned int)attr->st_uid);
-    if (pwd == NULL)
-        user = group;
-    else
-        user = pwd->pw_name;
+//     //user and group name
+//     grp = getgrgid((unsigned int)attr->st_gid);
+//     if (grp == NULL)
+//         return 1;
+//     group = grp->gr_name;
 
-    //actual date - 6 Months
-    deadline_time->tm_mon = deadline_time->tm_mon - 6;
-    if (deadline_time->tm_mon < 0)
-    {
-        deadline_time->tm_mon = deadline_time->tm_mon + 12;
-        deadline_time->tm_year = deadline_time->tm_year - 1;
-    }
-    if ((deadline_time->tm_mon == 3 || deadline_time->tm_mon == 5 || deadline_time->tm_mon == 8 || deadline_time->tm_mon == 10) && deadline_time->tm_mday == 31) //check if 31st in April, June, September, November
-    {
-        deadline_time->tm_mday = 30;
-    }
-    if (deadline_time->tm_mon == 1 && deadline_time->tm_mday > 28) //February (28 or 29 days)
-    {
-        if (deadline_time->tm_year % 100 == 0)
-        {
-            if (deadline_time->tm_year % 400 == 0 && deadline_time->tm_mday > 29)
-            { //leapyear
-                deadline_time->tm_mday = 29;
-            }
-            else
-            { //no leapyear
-                deadline_time->tm_mday = 28;
-            }
-        }
-        else
-        {
-            if (deadline_time->tm_year % 4 == 0 && deadline_time->tm_mday > 29)
-            { //leapyear
-                deadline_time->tm_mday = 29;
-            }
-            else
-            { //no leapyear
-                deadline_time->tm_mday = 28;
-            }
-        }
-    }
+//     pwd = getpwuid((unsigned int)attr->st_uid);
+//     if (pwd == NULL)
+//         user = group;
+//     else
+//         user = pwd->pw_name;
 
-    //check if last modification is older than 6 months -> if true, display year instead of time
-    if (deadline_time->tm_year < modified_time->tm_year)
-        flag = 1; //year deadline_time < year modified_time = show time
-    else if (deadline_time->tm_year == modified_time->tm_year)
-    {
-        if (deadline_time->tm_mon < modified_time->tm_mon)
-            flag = 1; //years equal, month deadline_time < month modified_time = show time
-        else if (deadline_time->tm_mon == modified_time->tm_mon)
-        {
-            if (deadline_time->tm_mday <= modified_time->tm_mday)
-                flag = 1; // years equal, months equal, day deadline_time <= day modified_time = show time
-            else
-                flag = 0; // years equal, months equal, day deadline_time > day modified_time = show year
-        }
-        else
-            flag = 0; //years equal, month deadline_time > month modified_time = show year
-    }
-    else
-    {
-        flag = 0; //year deadline_time > year modified_time = show year
-    }
+//     //actual date - 6 Months
+//     deadline_time->tm_mon = deadline_time->tm_mon - 6;
+//     if (deadline_time->tm_mon < 0)
+//     {
+//         deadline_time->tm_mon = deadline_time->tm_mon + 12;
+//         deadline_time->tm_year = deadline_time->tm_year - 1;
+//     }
+//     if ((deadline_time->tm_mon == 3 || deadline_time->tm_mon == 5 || deadline_time->tm_mon == 8 || deadline_time->tm_mon == 10) && deadline_time->tm_mday == 31) //check if 31st in April, June, September, November
+//     {
+//         deadline_time->tm_mday = 30;
+//     }
+//     if (deadline_time->tm_mon == 1 && deadline_time->tm_mday > 28) //February (28 or 29 days)
+//     {
+//         if (deadline_time->tm_year % 100 == 0)
+//         {
+//             if (deadline_time->tm_year % 400 == 0 && deadline_time->tm_mday > 29)
+//             { //leapyear
+//                 deadline_time->tm_mday = 29;
+//             }
+//             else
+//             { //no leapyear
+//                 deadline_time->tm_mday = 28;
+//             }
+//         }
+//         else
+//         {
+//             if (deadline_time->tm_year % 4 == 0 && deadline_time->tm_mday > 29)
+//             { //leapyear
+//                 deadline_time->tm_mday = 29;
+//             }
+//             else
+//             { //no leapyear
+//                 deadline_time->tm_mday = 28;
+//             }
+//         }
+//     }
 
-    if (flag == 1)
-    {
-        if (strftime(stime, 36, "%b %d %H:%S", localtime(&attr->st_mtime)) == 0)
-            return 1;
-    }
-    else
-    {
-        if (strftime(stime, 36, "%b %d %Y", localtime(&attr->st_mtime)) == 0)
-            return 1;
-    }
+//     //check if last modification is older than 6 months -> if true, display year instead of time
+//     if (deadline_time->tm_year < modified_time->tm_year)
+//         flag = 1; //year deadline_time < year modified_time = show time
+//     else if (deadline_time->tm_year == modified_time->tm_year)
+//     {
+//         if (deadline_time->tm_mon < modified_time->tm_mon)
+//             flag = 1; //years equal, month deadline_time < month modified_time = show time
+//         else if (deadline_time->tm_mon == modified_time->tm_mon)
+//         {
+//             if (deadline_time->tm_mday <= modified_time->tm_mday)
+//                 flag = 1; // years equal, months equal, day deadline_time <= day modified_time = show time
+//             else
+//                 flag = 0; // years equal, months equal, day deadline_time > day modified_time = show year
+//         }
+//         else
+//             flag = 0; //years equal, month deadline_time > month modified_time = show year
+//     }
+//     else
+//     {
+//         flag = 0; //year deadline_time > year modified_time = show year
+//     }
 
-    //type of file
-    while (i < 7 && typ == '0')
-    {
-        switch (i)
-        {
-        case 0:
-            (S_ISDIR(attr->st_mode)) ? (typ = 'd') : (0);
-            break;
-        case 1:
-            (S_ISBLK(attr->st_mode)) ? (typ = 'b') : (0);
-            break;
-        case 2:
-            (S_ISCHR(attr->st_mode)) ? (typ = 'c') : (0);
-            break;
-        case 3:
-            (S_ISFIFO(attr->st_mode)) ? (typ = '-') : (0);
-            break;
-        case 4:
-            (S_ISREG(attr->st_mode)) ? (typ = 'f') : (0);
-            break;
-        case 5:
-            (S_ISLNK(attr->st_mode)) ? (typ = 'l') : (0);
-            break;
-        case 6:
-            (S_ISSOCK(attr->st_mode)) ? (typ = 's') : (0);
-            break;
-        }
-    }
-    if (typ == 0)
-        return 1;
+//     if (flag == 1)
+//     {
+//         if (strftime(stime, 36, "%b %d %H:%S", localtime(&attr->st_mtime)) == 0)
+//             return 1;
+//     }
+//     else
+//     {
+//         if (strftime(stime, 36, "%b %d %Y", localtime(&attr->st_mtime)) == 0)
+//             return 1;
+//     }
 
-    //filename
-    if (typ == 'd')
-        filename = dirname(path);
-    else
-        filename = basename(path);
+//     //type of file
+//     while (i < 7 && typ == '0')
+//     {
+//         switch (i)
+//         {
+//         case 0:
+//             (S_ISDIR(attr->st_mode)) ? (typ = 'd') : (0);
+//             break;
+//         case 1:
+//             (S_ISBLK(attr->st_mode)) ? (typ = 'b') : (0);
+//             break;
+//         case 2:
+//             (S_ISCHR(attr->st_mode)) ? (typ = 'c') : (0);
+//             break;
+//         case 3:
+//             (S_ISFIFO(attr->st_mode)) ? (typ = '-') : (0);
+//             break;
+//         case 4:
+//             (S_ISREG(attr->st_mode)) ? (typ = 'f') : (0);
+//             break;
+//         case 5:
+//             (S_ISLNK(attr->st_mode)) ? (typ = 'l') : (0);
+//             break;
+//         case 6:
+//             (S_ISSOCK(attr->st_mode)) ? (typ = 's') : (0);
+//             break;
+//         }
+//     }
+//     if (typ == 0)
+//         return 1;
 
-    //symbolic link
-    if (typ == 'l')
-    {
-        errno = 0;
-        // readlink(filename, symlink, attr->st_size + 1);
-        if (errno != 0)
-        {
-            return 1;
-        }
-        symlink[attr->st_size] = '\0';
-        pfeil = " -> ";
-    }
-    else
-    {
-        symlink = "";
-        pfeil = "";
-    }
+//     //filename
+//     if (typ == 'd')
+//         filename = dirname(path);
+//     else
+//         filename = basename(path);
 
-    //print
-    printf("%c%c%c%c%c%c%c%c%c%c %d %s %s %ld %s %s %s %s",
-           typ,
-           (S_IRUSR & attr->st_mode) ? ('r') : ('-'),
-           (S_IWUSR & attr->st_mode) ? ('w') : ('-'),
-           (S_ISUID & attr->st_mode) ? ((S_IXUSR & attr->st_mode) ? ('s') : ('S')) : ((S_IXUSR & attr->st_mode) ? ('x') : ('-')),
-           (S_IRGRP & attr->st_mode) ? ('r') : ('-'),
-           (S_IWGRP & attr->st_mode) ? ('w') : ('-'),
-           (S_ISGID & attr->st_mode) ? ((S_IXGRP & attr->st_mode) ? ('s') : ('S')) : ((S_IXGRP & attr->st_mode) ? ('x') : ('-')),
-           (S_IROTH & attr->st_mode) ? ('r') : ('-'),
-           (S_IWOTH & attr->st_mode) ? ('w') : ('-'),
-           (S_ISVTX & attr->st_mode) ? ((S_IXOTH & attr->st_mode) ? ('t') : ('T')) : ((S_IXOTH & attr->st_mode) ? ('x') : ('-')),
-           (unsigned int)attr->st_nlink,
-           user,
-           group,
-           attr->st_blocks,
-           stime,
-           filename,
-           pfeil,
-           symlink);
+//     //symbolic link
+//     if (typ == 'l')
+//     {
+//         errno = 0;
+//         // readlink(filename, symlink, attr->st_size + 1);
+//         if (errno != 0)
+//         {
+//             return 1;
+//         }
+//         symlink[attr->st_size] = '\0';
+//         pfeil = " -> ";
+//     }
+//     else
+//     {
+//         symlink = "";
+//         pfeil = "";
+//     }
 
-    return 0;
-}
+//     //print
+//     printf("%c%c%c%c%c%c%c%c%c%c %d %s %s %ld %s %s %s %s",
+//            typ,
+//            (S_IRUSR & attr->st_mode) ? ('r') : ('-'),
+//            (S_IWUSR & attr->st_mode) ? ('w') : ('-'),
+//            (S_ISUID & attr->st_mode) ? ((S_IXUSR & attr->st_mode) ? ('s') : ('S')) : ((S_IXUSR & attr->st_mode) ? ('x') : ('-')),
+//            (S_IRGRP & attr->st_mode) ? ('r') : ('-'),
+//            (S_IWGRP & attr->st_mode) ? ('w') : ('-'),
+//            (S_ISGID & attr->st_mode) ? ((S_IXGRP & attr->st_mode) ? ('s') : ('S')) : ((S_IXGRP & attr->st_mode) ? ('x') : ('-')),
+//            (S_IROTH & attr->st_mode) ? ('r') : ('-'),
+//            (S_IWOTH & attr->st_mode) ? ('w') : ('-'),
+//            (S_ISVTX & attr->st_mode) ? ((S_IXOTH & attr->st_mode) ? ('t') : ('T')) : ((S_IXOTH & attr->st_mode) ? ('x') : ('-')),
+//            (unsigned int)attr->st_nlink,
+//            user,
+//            group,
+//            attr->st_blocks,
+//            stime,
+//            filename,
+//            pfeil,
+//            symlink);
+
+//     return 0;
+// }

@@ -50,14 +50,14 @@ char *programName = "";
 // Prototypes
 int parse_params(int argc, char *argv[], t_params *params);
 int free_params(t_params *params);
-int do_file(const char *fp_path, t_params *params);
-void do_dir(const char *dp_path, t_params *params);
-int do_user(unsigned int userid, struct stat *attr);
+int do_file(char *fp_path, t_params *params);
+void do_dir(char *dp_path, t_params *params);
+int do_user(unsigned int userid, struct stat attr);
 int do_type(char type, struct stat attr);
 int do_ls(char *path, struct stat attr);
 int do_name(char *path, char *pattern);
-int do_print(const char *fp_path);
 int do_path(char *path, char *pattern);
+int do_print(char *fp_path);
 // int do_nouser(const stat *attr);
 
 int main(int argc, char *argv[])
@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
 
 // TODO: aParams - to mangage all params including filename and targetdirectory
 // @ralph, david: Hab das zurückgeändert in struct stat *attr, weil ich nicht verstehe, wie das mit const funktionieren soll
-int do_file(const char *fp_path, t_params *params)
+int do_file(char *fp_path, t_params *params)
 {
     errno = 0;
     struct stat attr;
@@ -113,13 +113,29 @@ int do_file(const char *fp_path, t_params *params)
         }
 
         // user
-        // if (params->user)
-        // {
-        //     if (do_user(params->userid, attr) != 0)
-        //     {
-        //         return 0;
-        //     }
-        // }
+        if (params->user)
+        {
+            if (do_user(params->userid, attr) != 0)
+            {
+                return 0;
+            }
+        }
+
+        if (params->name)
+        {
+            if (do_name(fp_path, params->name) != 0)
+            {
+                return 0;
+            }
+        }
+
+        if (params->path)
+        {
+            if (do_path(fp_path, params->path) != 0)
+            {
+                return 0;
+            }
+        }
 
         // print functionality
         // simple path print
@@ -133,15 +149,15 @@ int do_file(const char *fp_path, t_params *params)
         }
 
         // detailed ls print
-        // if (params->ls)
-        // {
-        //     if (do_ls(fp_path, attr) != 0)
-        //     {
-        //         return 1;
-        //     }
-        //     wasPrinted = 1;
-        // }
-        // printf("%s\n", fp_path);
+        if (params->ls)
+        {
+            if (do_ls(fp_path, attr) != 0)
+            {
+                return 1;
+            }
+            wasPrinted = 1;
+        }
+        printf("%s\n", fp_path);
 
         if (wasPrinted == 0)
         {
@@ -166,7 +182,7 @@ int do_file(const char *fp_path, t_params *params)
 }
 
 // do_dir - main logic for intermediate showcase
-void do_dir(const char *dpath, t_params *params)
+void do_dir(char *dpath, t_params *params)
 {
     DIR *dir;
     struct dirent *entry;
@@ -388,7 +404,7 @@ int free_params(t_params *params)
     return 1;
 }
 
-int do_print(const char *fp_path)
+int do_print(char *fp_path)
 {
 
     if (printf("%s\n", fp_path) < 0)
@@ -400,13 +416,56 @@ int do_print(const char *fp_path)
     return EXIT_SUCCESS;
 }
 
-// int do_user(unsigned int userid, struct stat *attr)
-// {
-//     if (userid == (unsigned int)attr.st_uid)
-//         return 0;
-//     else
-//         return 1;
-// }
+int do_path(char *fullpath, char *pattern)
+{
+    if (fnmatch(pattern, fullpath, FNM_NOESCAPE) == 0)
+    {
+        return 0;
+    }
+    else if (fnmatch(pattern, fullpath, FNM_NOESCAPE) == FNM_NOMATCH)
+    {
+        return 1;
+    }
+    else if (fnmatch(pattern, fullpath, FNM_NOESCAPE) != 0)
+    {
+        fprintf(stderr, "myfind: do_path(%s): %s\n", fullpath, strerror(errno));
+        return 1;
+    }
+    else
+    {
+        return 1;
+    }
+}
+
+int do_name(char *fp_path, char *pattern)
+{
+    char *filename = basename(fp_path);
+    if (fnmatch(pattern, filename, FNM_PATHNAME | FNM_NOESCAPE) == 0)
+    {
+        return 0;
+    }
+    else if (fnmatch(pattern, filename, FNM_PATHNAME | FNM_NOESCAPE) == FNM_NOMATCH)
+    {
+        return 1;
+    }
+    else if (fnmatch(pattern, filename, FNM_PATHNAME | FNM_NOESCAPE) != 0)
+    {
+        fprintf(stderr, "myfind: check_name(%s): %s\n", filename, strerror(errno));
+        return 1;
+    }
+    else
+    {
+        return 1;
+    }
+}
+
+int do_user(unsigned int userid, struct stat attr)
+{
+    if (userid == (unsigned int)attr.st_uid)
+        return 0;
+    else
+        return 1;
+}
 
 int do_type(char type, struct stat attr)
 {

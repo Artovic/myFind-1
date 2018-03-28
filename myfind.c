@@ -10,7 +10,10 @@
 //
 // @version 002
 //
-// @todo Add required fucntionality.
+// @todo fix ls
+// @todo check type - f not working
+// @todo check name and path again
+// @todo fix param cycling and logic
 //
 
 #include <dirent.h>
@@ -50,8 +53,9 @@ char *programName = "";
 // Prototypes
 int parse_params(int argc, char *argv[], t_params *params);
 int free_params(t_params *params);
-int do_file(char *fp_path, t_params *params);
-void do_dir(char *dp_path, t_params *params);
+int do_startPoint(char *fp_path, t_params *params);
+int do_file(char *fp_path, t_params *params, struct stat attr);
+void do_dir(char *dp_path, t_params *params, struct stat attr);
 int do_user(unsigned int userid, struct stat attr);
 int do_type(char type, struct stat attr);
 int do_ls(char *path, struct stat attr);
@@ -64,11 +68,7 @@ int main(int argc, char *argv[])
 {
     t_params *params;
     programName = argv[0];
-    // prevent warnings regarding unused params
-    argc = argc;
-    // argv = argv;
 
-    //
     params = calloc(1, sizeof(*params));
     if (!params)
     {
@@ -84,105 +84,122 @@ int main(int argc, char *argv[])
 
     char *location = argv[1];
 
-    do_file(location, params);
+    if (do_startPoint(location, params) != 0)
+    {
+        free_params(params);
+        return 1;
+    }
 
     free_params(params);
 
     return 0;
 }
 
-// TODO: aParams - to mangage all params including filename and targetdirectory
-// @ralph, david: Hab das zurückgeändert in struct stat *attr, weil ich nicht verstehe, wie das mit const funktionieren soll
-int do_file(char *fp_path, t_params *params)
+// helper function that allows us to abort a file with return
+int do_startPoint(char *startPoint, t_params *params)
 {
     errno = 0;
     struct stat attr;
 
-    int wasPrinted = 0;
-    wasPrinted = wasPrinted;
-    if (lstat(fp_path, &attr) == 0)
+    if (lstat(startPoint, &attr) == 0)
     {
-        // starting with filter functionalities
-        // type
-        if (params->type)
-        {
-            if (do_type(params->type, attr) != 0)
-            {
-                return 0; /* the entry didn't pass the check, do not print it */
-            }
-        }
-
-        // user
-        if (params->user)
-        {
-            if (do_user(params->userid, attr) != 0)
-            {
-                return 0;
-            }
-        }
-
-        if (params->name)
-        {
-            if (do_name(fp_path, params->name) != 0)
-            {
-                return 0;
-            }
-        }
-
-        if (params->path)
-        {
-            if (do_path(fp_path, params->path) != 0)
-            {
-                return 0;
-            }
-        }
-
-        // print functionality
-        // simple path print
-        if (params->print)
-        {
-            if (do_print(fp_path) != 0)
-            {
-                return 1; /* a fatal error occurred */
-            }
-            wasPrinted = 1;
-        }
-
-        // detailed ls print
-        if (params->ls)
-        {
-            if (do_ls(fp_path, attr) != 0)
-            {
-                return 1;
-            }
-            wasPrinted = 1;
-        }
-        printf("%s\n", fp_path);
-
-        if (wasPrinted == 0)
-        {
-            if (do_print(fp_path) != 0)
-            {
-                return 1;
-            }
-        }
-
-        //TODO: if (S_ISDIR(sb.st_mode)) check in do_file. if true, call do_dir, if falsy, countinue do_file
-        // printf("%s\n", fp_path);
+        do_file(startPoint, params, attr);
+        /* if a directory, process its contents */
         if (S_ISDIR(attr.st_mode))
         {
-            do_dir(fp_path, params);
+            do_dir(startPoint, params, attr);
         }
     }
     else
     {
-        fprintf(stderr, "%s: lstat(%s): %s\n", programName, fp_path, strerror(errno));
+        fprintf(stderr, "%s: lstat(%s): %s\n", programName, startPoint, strerror(errno));
     }
+
+    if (errno != 0)
+    {
+        return 1;
+    }
+    return 0;
+}
+
+// TODO: aParams - to mangage all params including filename and targetdirectory
+// @ralph, david: Hab das zurückgeändert in struct stat *attr, weil ich nicht verstehe, wie das mit const funktionieren soll
+int do_file(char *fp_path, t_params *params, struct stat attr)
+{
+    // char *f = basename(fp_path);
+    errno = 0;
+
+    int wasPrinted = 0;
+    wasPrinted = wasPrinted;
+    // starting with filter functionalities
+    // type
+    if (params->type)
+    {
+        if (do_type(params->type, attr) != 0)
+        {
+            return 0; /* the entry didn't pass the check, do not print it */
+        }
+    }
+
+    // user
+    if (params->user)
+    {
+        if (do_user(params->userid, attr) != 0)
+        {
+            return 0;
+        }
+    }
+
+    if (params->name)
+    {
+        if (do_name(fp_path, params->name) != 0)
+        {
+            return 0;
+        }
+    }
+
+    if (params->path)
+    {
+        if (do_path(fp_path, params->path) != 0)
+        {
+            return 0;
+        }
+    }
+
+    // print functionality
+    // simple path print
+    if (params->print)
+    {
+        if (do_print(fp_path) != 0)
+        {
+            // return 1; /* a fatal error occurred */
+        }
+        wasPrinted = 1;
+    }
+
+    // detailed ls print
+    if (params->ls)
+    {
+        if (do_ls(fp_path, attr) != 0)
+        {
+            return 1;
+        }
+        wasPrinted = 1;
+    }
+
+    if (wasPrinted == 0)
+    {
+        if (do_print(fp_path) != 0)
+        {
+            return 1;
+        }
+    }
+
     return true;
 }
 
 // do_dir - main logic for intermediate showcase
-void do_dir(char *dpath, t_params *params)
+void do_dir(char *dpath, t_params *params, struct stat attr)
 {
     DIR *dir;
     struct dirent *entry;
@@ -222,7 +239,14 @@ void do_dir(char *dpath, t_params *params)
             fprintf(stderr, "%s: snprintf(): %s\n", programName, strerror(errno));
             break;
         }
-        do_file(fullpath, params);
+        if (lstat(fullpath, &attr) == 0)
+        {
+            do_file(fullpath, params, attr);
+            if (S_ISDIR(attr.st_mode))
+            {
+                do_dir(fullpath, params, attr);
+            }
+        }
     }
 
     if (errno != 0)
@@ -418,45 +442,40 @@ int do_print(char *fp_path)
 
 int do_path(char *fullpath, char *pattern)
 {
-    if (fnmatch(pattern, fullpath, FNM_NOESCAPE) == 0)
+    errno = 0;
+    int flags = 0;
+
+    if (fnmatch(pattern, fullpath, flags) == 0)
     {
         return 0;
     }
-    else if (fnmatch(pattern, fullpath, FNM_NOESCAPE) == FNM_NOMATCH)
+    if (errno != 0)
     {
+        fprintf(stderr, "%s: fnmatch(%s): %s\n", programName, fullpath, strerror(errno));
         return 1;
     }
-    else if (fnmatch(pattern, fullpath, FNM_NOESCAPE) != 0)
-    {
-        fprintf(stderr, "myfind: do_path(%s): %s\n", fullpath, strerror(errno));
-        return 1;
-    }
-    else
-    {
-        return 1;
-    }
+
+    // if not matching or error 1 shall be returned
+    return 1;
 }
 
 int do_name(char *fp_path, char *pattern)
 {
+    errno = 0;
     char *filename = basename(fp_path);
-    if (fnmatch(pattern, filename, FNM_PATHNAME | FNM_NOESCAPE) == 0)
+    int flags = 0;
+
+    if (fnmatch(pattern, filename, flags) == 0)
     {
         return 0;
     }
-    else if (fnmatch(pattern, filename, FNM_PATHNAME | FNM_NOESCAPE) == FNM_NOMATCH)
+    if (errno != 0)
     {
-        return 1;
+        fprintf(stderr, "%s: fnmatch(%s): %s\n", programName, filename, strerror(errno));
     }
-    else if (fnmatch(pattern, filename, FNM_PATHNAME | FNM_NOESCAPE) != 0)
-    {
-        fprintf(stderr, "myfind: check_name(%s): %s\n", filename, strerror(errno));
-        return 1;
-    }
-    else
-    {
-        return 1;
-    }
+
+    // if not matching or error 1 shall be returned
+    return 1;
 }
 
 int do_user(unsigned int userid, struct stat attr)

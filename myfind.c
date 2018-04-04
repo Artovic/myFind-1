@@ -125,59 +125,65 @@ int do_file(char *fp_path, t_params *params, struct stat attr)
 {
     int wasPrinted = 0;
 
-    // starting with filter functionalities
-    // type
-    if (params->type)
+    do
     {
-        if (do_type(params->type, attr) != 0)
-            return 0; /* the entry didn't pass the check, do not print it */
-    }
 
-    // user
-    if (params->user)
-    {
-        if (do_user(params->userid, attr) != 0)
-            return 0;
-    }
-
-    if (params->nouser)
-    {
-        if (do_nouser(attr) != 0)
-            return 0;
-    }
-
-    if (params->name)
-    {
-        if (do_name(fp_path, params->name) != 0)
-            return 0;
-    }
-
-    if (params->path)
-    {
-        if (do_path(fp_path, params->path) != 0)
-            return 0;
-    }
-
-    // print functionality
-    // simple path print
-    if (params->print)
-    {
-        if (do_print(fp_path) != 0)
+        // starting with filter functionalities
+        // type
+        if (params->type)
         {
-            return 1; // fatal error
+            if (do_type(params->type, attr) != 0)
+                return 0; /* the entry didn't pass the check, do not print it */
         }
-        wasPrinted = 1;
-    }
 
-    // detailed ls print
-    if (params->ls)
-    {
-        if (do_ls(fp_path, attr) != 0)
+        // user
+        if (params->user)
         {
-            return 1;
+            if (do_user(params->userid, attr) != 0)
+                return 0;
         }
-        wasPrinted = 1;
-    }
+
+        if (params->nouser)
+        {
+            if (do_nouser(attr) != 0)
+                return 0;
+        }
+
+        if (params->name)
+        {
+            if (do_name(fp_path, params->name) != 0)
+                return 0;
+        }
+
+        if (params->path)
+        {
+            if (do_path(fp_path, params->path) != 0)
+                return 0;
+        }
+
+        // print functionality
+        // simple path print
+        if (params->print)
+        {
+            if (do_print(fp_path) != 0)
+            {
+                return 1; // fatal error
+            }
+            wasPrinted = 1;
+        }
+
+        // detailed ls print
+        if (params->ls)
+        {
+            if (do_ls(fp_path, attr) != 0)
+            {
+                return 1;
+            }
+            wasPrinted = 1;
+        }
+
+        params = params->next;
+    } while (params);
 
     if (wasPrinted == 0)
     {

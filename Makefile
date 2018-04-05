@@ -1,19 +1,18 @@
 ##
 ## @file Makefile
-## Betriebssysteme Hello Makefile
-## Beispiel 0
+## Betriebssysteme myfind Makefile
+## Beispiel 1
 ##
-## @author Thomas M. Galla <galla@technikum-wien.at> (tdxxx)
-## @author Bernd Petrovitsch <bernd.petrovitsch@technikum-wien.at>
-## @date 2005/02/22
+## @author Dominic Mages <ic17b014@technikum-wien.at>
+## @author Ralph Hödl <ic17b003@technikum-wien.at>
+## @author David North <ic17b086@technikum-wien.at>
+## @date 2018/04/05
 ##
-## @version $Revision: 1689 $
+## @version $Revision: 2 $
 ##
 ## @todo
 ##
-## URL: $HeadURL: https://svn.petrovitsch.priv.at/ICSS-BES/trunk/2015/CIS/lu/hello/Makefile $
-##
-## Last Modified: $Author: tom $
+## Last Modified: $Author: Dominic Mages $
 ##
 
 ##

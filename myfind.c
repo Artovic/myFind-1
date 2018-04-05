@@ -6,14 +6,13 @@
 // @author Dominic Mages <ic17b014@technikum-wien.at>
 // @author Ralph Hödl <ic17b003@technikum-wien.at>
 // @author David North <ic17b086@technikum-wien.at>
-// @date 2018/03/17
+// @date 2018/04/05
 //
-// @version 003
+// @version 007
 //
-// @todo fix ls
-// @todo fix param cycling and logic and more params to be set
 //
 
+// -------------------------------------------------------------- includes --
 #include <dirent.h>
 #include <errno.h>
 #include <fnmatch.h>
@@ -28,13 +27,15 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
-#include <stdbool.h>
 #include <time.h>
+#include <ctype.h>
 
-// linked list that contains all params
+// --------------------------------------------------------------- defines --
+
+// -------------------------------------------------------------- typedefs --
+// linked list that contains parsed params
 typedef struct s_params
 {
-    char *location;
     int print;
     int ls;
     int nouser;
@@ -46,9 +47,11 @@ typedef struct s_params
     struct s_params *next;
 } t_params;
 
+// --------------------------------------------------------------- globals --
 // global for program name - got ok from galla for this
 char *programName = "";
 
+// ------------------------------------------------------------- functions --
 // Prototypes
 int parse_params(int argc, char *argv[], t_params *params);
 int free_params(t_params *params);
@@ -63,6 +66,16 @@ int do_name(char *path, char *pattern);
 int do_path(char *path, char *pattern);
 int do_print(char *fp_path);
 
+//*
+// \brief Reimplementation of GNU find
+//
+// This is the main entrypoint
+//
+// \param argc the number of arguments
+// \param argv the arguments itselves (including the program name in argv[0])
+//
+// \returns EXIT_SUCCESS, EXIT_FAILURE
+//
 int main(int argc, char *argv[])
 {
     t_params *params;
@@ -72,13 +85,13 @@ int main(int argc, char *argv[])
     if (!params)
     {
         fprintf(stderr, "%s: calloc(): %s\n", programName, strerror(errno));
-        return 1;
+        return EXIT_FAILURE;
     }
 
     if (parse_params(argc, argv, params) != 0)
     {
         free_params(params);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     char *location = argv[1];
@@ -86,15 +99,25 @@ int main(int argc, char *argv[])
     if (do_startPoint(location, params) != 0)
     {
         free_params(params);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     free_params(params);
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
-// helper function that allows us to abort a file with return
+//*
+// \brief handles the starting location
+//
+// This function allows us to work with return values in do_file,
+// which would not be possible if the do_file call is comming from main
+//
+// \param startPoint the command-line-given startpoint
+// \param params the linked list of parsed parameters
+//
+// \returns EXIT_SUCCESS, EXIT_FAILURE
+//
 int do_startPoint(char *startPoint, t_params *params)
 {
     errno = 0;
@@ -116,11 +139,26 @@ int do_startPoint(char *startPoint, t_params *params)
 
     if (errno != 0)
     {
-        return 1;
+        return EXIT_FAILURE;
     }
-    return 0;
+    return EXIT_SUCCESS;
 }
 
+//*
+// \brief handler for a single file
+//
+// This function iterates over all passed parameters
+// and filters for those.
+// If the file does not meet the requirements, it will
+// not be printed.
+// If no print paramter was given, it will call do_print as fallback.
+//
+// \param fp_path path the file to be processed
+// \param params the linked list of parsed parameters
+// \param attr the entry attributes from lstat
+//
+// \returns EXIT_SUCCESS, EXIT_FAILURE
+//
 int do_file(char *fp_path, t_params *params, struct stat attr)
 {
     int wasPrinted = 0;
@@ -133,32 +171,32 @@ int do_file(char *fp_path, t_params *params, struct stat attr)
         if (params->type)
         {
             if (do_type(params->type, attr) != 0)
-                return 0; /* the entry didn't pass the check, do not print it */
+                return EXIT_SUCCESS; /* the entry didn't pass the check, do not print it */
         }
 
         // user
         if (params->user)
         {
             if (do_user(params->userid, attr) != 0)
-                return 0;
+                return EXIT_SUCCESS;
         }
 
         if (params->nouser)
         {
             if (do_nouser(attr) != 0)
-                return 0;
+                return EXIT_SUCCESS;
         }
 
         if (params->name)
         {
             if (do_name(fp_path, params->name) != 0)
-                return 0;
+                return EXIT_SUCCESS;
         }
 
         if (params->path)
         {
             if (do_path(fp_path, params->path) != 0)
-                return 0;
+                return EXIT_SUCCESS;
         }
 
         // print functionality
@@ -167,7 +205,7 @@ int do_file(char *fp_path, t_params *params, struct stat attr)
         {
             if (do_print(fp_path) != 0)
             {
-                return 1; // fatal error
+                return EXIT_FAILURE; // fatal error
             }
             wasPrinted = 1;
         }
@@ -177,7 +215,7 @@ int do_file(char *fp_path, t_params *params, struct stat attr)
         {
             if (do_ls(fp_path, attr) != 0)
             {
-                return 1;
+                return EXIT_FAILURE;
             }
             wasPrinted = 1;
         }
@@ -189,13 +227,26 @@ int do_file(char *fp_path, t_params *params, struct stat attr)
     {
         if (do_print(fp_path) != 0)
         {
-            return 1;
+            return EXIT_FAILURE;
         }
     }
 
-    return true;
+    return EXIT_SUCCESS;
 }
 
+//*
+// \brief handler for a single directory
+//
+// This function cotains all logic for a directory.
+// If the directory does not exist, we will exit the function.
+// It will skip . and .. and add a trailing slash if needed
+// After the full path is created, it will call do file
+// If the entry is a directory it will additionally call itself
+//
+// \param d_path path the file to be processed
+// \param params the linked list of parsed parameters
+// \param attr the entry attributes from lstat
+//
 void do_dir(char *dpath, t_params *params, struct stat attr)
 {
     DIR *dir;
@@ -257,16 +308,35 @@ void do_dir(char *dpath, t_params *params, struct stat attr)
     }
 }
 
+//*
+// \brief handler for parsing the command line params
+//
+// We will iterate over all command line arguments and
+// map them to members of the current allocation of the
+// params.
+// In the same time a validation of those command line arguments
+// is done.
+// In case of error, a status will indicate, which error happened
+// and print it.
+//
+// \param argc amount of arguments
+// \param argv the arguments itself
+// \param params the linked list of parsed parameters
+//
+// \returns EXIT_SUCCESS, EXIT_FAILURE
+//
 int parse_params(int argc, char *argv[], t_params *params)
 {
     struct passwd *pwd;
     int i; // used outside of the loop
 
     int status = 0;
+    int expression = 0;
 
     // params can start from argv[2] because 0 is progname and 1 is path
     for (i = 2; i < argc; i++, params = params->next)
     {
+        expression = 0;
 
         // allocate memory for the next run
         params->next = calloc(1, sizeof(*params));
@@ -274,23 +344,26 @@ int parse_params(int argc, char *argv[], t_params *params)
         if (!params->next)
         {
             fprintf(stderr, "%s: calloc(): %s\n", programName, strerror(errno));
-            return 1;
+            return EXIT_FAILURE;
         }
 
         // single part params
         if (strcmp(argv[i], "-print") == 0)
         {
             params->print = 1;
+            expression = 1;
             continue;
         }
         if (strcmp(argv[i], "-ls") == 0)
         {
             params->ls = 1;
+            expression = 1;
             continue;
         }
         if (strcmp(argv[i], "-nouser") == 0)
         {
             params->nouser = 1;
+            expression = 1;
             continue;
         }
 
@@ -304,13 +377,17 @@ int parse_params(int argc, char *argv[], t_params *params)
                 if ((pwd = getpwnam(params->user)))
                 {
                     params->userid = pwd->pw_uid;
+                    expression = 1;
+
                     continue;
                 }
                 // or if the value is a number
-                if (sscanf(params->user, "%u", &params->userid))
+                if (sscanf(params->user, "%u%*c", &params->userid))
                 {
+                    expression = 1;
                     continue;
                 }
+
                 status = 4;
                 break; // user is wether a number nor existing
             }
@@ -325,6 +402,7 @@ int parse_params(int argc, char *argv[], t_params *params)
             if (argv[++i])
             {
                 params->name = argv[i];
+                expression = 1;
                 continue;
             }
             else
@@ -338,6 +416,7 @@ int parse_params(int argc, char *argv[], t_params *params)
             if (argv[++i])
             {
                 params->path = argv[i];
+                expression = 1;
                 continue;
             }
             else
@@ -358,6 +437,7 @@ int parse_params(int argc, char *argv[], t_params *params)
                     (strcmp(argv[i], "s") == 0))
                 {
                     params->type = argv[i][0];
+                    expression = 1;
                     continue;
                 }
                 else
@@ -373,6 +453,12 @@ int parse_params(int argc, char *argv[], t_params *params)
             }
         }
 
+        if (expression == 0)
+        {
+            status = 1;
+            break;
+        }
+
         // handler for params that do not exist
         if (argv[i][0] == '-')
         {
@@ -384,34 +470,44 @@ int parse_params(int argc, char *argv[], t_params *params)
     /* error handling */
     if (status == 1)
     {
-        fprintf(stderr, "%s: unknown predicate: `%s'\n", programName, argv[i]);
-        return 1;
+        fprintf(stderr, "%s: invalid predicate: `%s'\n", programName, argv[i]);
+        return EXIT_FAILURE;
     }
     if (status == 2)
     {
         fprintf(stderr, "%s: missing argument to `%s'\n", programName, argv[i - 1]);
-        return 1;
+        return EXIT_FAILURE;
     }
     if (status == 3)
     {
         fprintf(stderr, "%s: unknown argument to %s: %s\n", programName, argv[i - 1], argv[i]);
-        return 1;
+        return EXIT_FAILURE;
     }
     if (status == 4)
     {
         fprintf(stderr, "%s: `%s' is not the name of a known user\n", programName, argv[i]);
-        return 1;
+        return EXIT_FAILURE;
     }
     if (status == 5)
     {
         fprintf(stderr, "%s: paths must precede expression: %s\n", programName, argv[i]);
         fprintf(stderr, "Usage: %s <file or directory> [ <action> ]\n", programName);
-        return 1;
+        return EXIT_FAILURE;
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
+//*
+// \brief handler for releasing the allocated memory of the params linked list
+//
+// Just iterate over the params until params is null
+// in each iteration set params to the next params in the list
+//
+// \param params the linked list of parsed parameters
+//
+// \returns EXIT_SUCCESS
+//
 int free_params(t_params *params)
 {
 
@@ -422,9 +518,18 @@ int free_params(t_params *params)
         params = next;
     }
 
-    return 1;
+    return EXIT_SUCCESS;
 }
 
+//*
+// \brief printing the current file path
+//
+// Just prints the passed parameter and has error handling
+//
+// \param fp_path path the file/directory to be processed
+//
+// \returns EXIT_SUCCESS, EXIT_FAILURE
+//
 int do_print(char *fp_path)
 {
 
@@ -437,6 +542,16 @@ int do_print(char *fp_path)
     return EXIT_SUCCESS;
 }
 
+//*
+// \brief filter function for path
+//
+// checks the passed path against the passed pattern
+//
+// \param fullpath path the file/directory to be processed
+// \param pattern pattern that shall match the path
+//
+// \returns EXIT_SUCCESS, EXIT_FAILURE
+//
 int do_path(char *fullpath, char *pattern)
 {
     errno = 0;
@@ -444,18 +559,28 @@ int do_path(char *fullpath, char *pattern)
 
     if (fnmatch(pattern, fullpath, flags) == 0)
     {
-        return 0;
+        return EXIT_SUCCESS;
     }
     if (errno != 0)
     {
         fprintf(stderr, "%s: fnmatch(%s): %s\n", programName, fullpath, strerror(errno));
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // if not matching or error 1 shall be returned
-    return 1;
+    return EXIT_FAILURE;
 }
 
+//*
+// \brief filter function for file-names
+//
+// checks the passed file-name against the passed pattern
+//
+// \param fp_path path the file/directory to be processed
+// \param pattern pattern that shall match the path
+//
+// \returns EXIT_SUCCESS, EXIT_FAILURE
+//
 int do_name(char *fp_path, char *pattern)
 {
     errno = 0;
@@ -464,7 +589,7 @@ int do_name(char *fp_path, char *pattern)
 
     if (fnmatch(pattern, filename, flags) == 0)
     {
-        return 0;
+        return EXIT_SUCCESS;
     }
     if (errno != 0)
     {
@@ -472,17 +597,36 @@ int do_name(char *fp_path, char *pattern)
     }
 
     // if not matching or error 1 shall be returned
-    return 1;
+    return EXIT_FAILURE;
 }
 
+//*
+// \brief filter function for users
+//
+// checks the passed userid against one in attr
+//
+// \param fp_path path the file/directory to be processed
+// \param attr the entry attributes from lstat
+//
+// \returns EXIT_SUCCESS, EXIT_FAILURE
+//
 int do_user(unsigned int userid, struct stat attr)
 {
     if (userid == (unsigned int)attr.st_uid)
-        return 0;
+        return EXIT_SUCCESS;
     else
-        return 1;
+        return EXIT_FAILURE;
 }
 
+//*
+// \brief filter function for files without a user
+//
+// checks if the file has no userid
+//
+// \param attr the entry attributes from lstat
+//
+// \returns EXIT_SUCCESS, EXIT_FAILURE
+//
 int do_nouser(struct stat attr)
 {
     static unsigned int cache_uid = UINT_MAX;
@@ -490,7 +634,7 @@ int do_nouser(struct stat attr)
     // skip getgrgid if we have the record in cache
     if (cache_uid == attr.st_uid)
     {
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // reset cache
@@ -498,15 +642,25 @@ int do_nouser(struct stat attr)
 
     if (!getpwuid(attr.st_uid))
     {
-        return 0;
+        return EXIT_SUCCESS;
     }
 
     // cache an existing user (more common)
     cache_uid = attr.st_uid;
 
-    return 1;
+    return EXIT_FAILURE;
 }
 
+//*
+// \brief filter function the file type
+//
+// checks if the type matches the entry attributes
+//
+// \param type the file type from the params
+// \param attr the entry attributes from lstat
+//
+// \returns EXIT_SUCCESS, EXIT_FAILURE
+//
 int do_type(char type, struct stat attr)
 {
     int checkvalue;
@@ -539,10 +693,22 @@ int do_type(char type, struct stat attr)
     }
 
     if (checkvalue != 0)
-        return 0;
+        return EXIT_SUCCESS;
     else
-        return 1;
+        return EXIT_FAILURE;
 }
+
+//*
+// \brief prints the current file path with details
+//
+// Prints the passed path in a view
+// with detailed information
+//
+// \param path path the file to be processed
+// \param attr the entry attributes from lstat
+//
+// \returns EXIT_SUCCESS, EXIT_FAILURE
+//
 
 int do_ls(char *path, struct stat attr)
 {
@@ -561,7 +727,7 @@ int do_ls(char *path, struct stat attr)
 
     grp = getgrgid((unsigned int)attr.st_gid);
     if (grp == NULL)
-        return 1;
+        return EXIT_FAILURE;
     group = grp->gr_name;
 
     pwd = getpwuid((unsigned int)attr.st_uid);
@@ -661,5 +827,5 @@ int do_ls(char *path, struct stat attr)
             inode, blocks, permissions, links, user, group, size, mtime, path, (symlink ? "->" : ""), (symlink ? symlink : ""));
 
     free(symlink);
-    return 0;
+    return EXIT_SUCCESS;
 }
